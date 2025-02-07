@@ -1,0 +1,128 @@
+name: "savannah"
+services:
+  postgres-savannah:
+    image: docker.io/bitnami/postgresql:${POSTGRES_VERSION_TAG}
+    hostname: ${DJANGO_POSTGRESQL_HOSTNAME}
+    container_name: ${DJANGO_POSTGRESQL_HOSTNAME}
+    volumes:
+      - type: volume
+        source: order_db
+        target: /bitnami/postgresql
+    environment:
+      POSTGRESQL_USERNAME: ${DJANGO_POSTGRESQL_USERNAME}
+      POSTGRESQL_PASSWORD: ${DJANGO_POSTGRESQL_PASSWORD}
+      POSTGRESQL_DATABASE: ${DJANGO_POSTGRESQL_DATABASE}
+      POSTGRESQL_PORT_NUMBER: ${DJANGO_POSTGRESQL_PORT_NUMBER}
+
+    ports:
+      - ${DJANGO_POSTGRESQL_PORT_NUMBER}:${DJANGO_POSTGRESQL_PORT_NUMBER}
+    networks:
+      - keycloak_network
+    restart: on-failure:5
+
+  keycloak_postgres_db:
+    hostname: ${KEYCLOAK_POSTGRESQL_HOSTNAME}
+    container_name: ${KEYCLOAK_POSTGRESQL_HOSTNAME}
+    image: docker.io/bitnami/postgresql:${POSTGRES_VERSION_TAG}
+    ports:
+      - ${KEYCLOAK_POSTGRESQL_PORT}:${KEYCLOAK_POSTGRESQL_PORT}
+    volumes:
+      # - type: volume
+      #   source: keycloak_data
+      #   target: /bitnami/postgresql
+      - ./data/keycloak:/bitnami/postgresql
+    environment:
+      POSTGRESQL_PORT_NUMBER: ${KEYCLOAK_POSTGRESQL_PORT}
+      POSTGRESQL_USERNAME: ${KEYCLOAK_POSTGRESQL_USERNAME}
+      POSTGRESQL_PASSWORD: ${KEYCLOAK_POSTGRESQL_PASSWORD}
+      POSTGRESQL_DATABASE: ${KEYCLOAK_POSTGRESQL_DATABASE}
+    networks:
+      - keycloak_network
+    restart: on-failure:5
+
+  keycloak:
+    hostname: ${KEYCLOAK_CONTAINER_HOSTNAME}
+    container_name: ${KEYCLOAK_CONTAINER_HOSTNAME}
+    image: docker.io/bitnami/keycloak:${KEYCLOAK_VERSION_TAG}
+    ports:
+      - 0.0.0.0:${KEYCLOAK_EXTERNAL_PORT}:${KEYCLOAK_INTERNAL_HTTP_PORT}
+    environment:
+      # Admin setup
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      KEYCLOAK_CREATE_ADMIN_USER: ${KEYCLOAK_CREATE_ADMIN_USER}
+
+      # Database
+      KEYCLOAK_JDBC_DRIVER: ${KEYCLOAK_JDBC_DRIVER}
+      KEYCLOAK_DATABASE_HOST: ${KEYCLOAK_DATABASE_HOST}
+      KEYCLOAK_DATABASE_PORT: ${KEYCLOAK_DATABASE_PORT}
+      KEYCLOAK_DATABASE_USER: ${KEYCLOAK_DATABASE_USER}
+      KEYCLOAK_DATABASE_NAME: ${KEYCLOAK_DATABASE_NAME}
+      KEYCLOAK_DATABASE_VENDOR: ${KEYCLOAK_DATABASE_VENDOR}
+      KEYCLOAK_DATABASE_PASSWORD: ${KEYCLOAK_DATABASE_PASSWORD}
+
+      # Other Configs
+      KEYCLOAK_PROXY: ${KEYCLOAK_PROXY}
+      KEYCLOAK_LOG_LEVEL: ${KEYCLOAK_LOG_LEVEL}
+      KEYCLOAK_HTTP_PORT: ${KEYCLOAK_INTERNAL_HTTP_PORT}
+      KEYCLOAK_PRODUCTION: ${KEYCLOAK_PRODUCTION}
+      KC_RUN_IN_CONTAINER: ${KC_RUN_IN_CONTAINER}
+      KEYCLOAK_LOG_OUTPUT: ${KEYCLOAK_LOG_OUTPUT}
+      KEYCLOAK_DAEMON_USER: ${KEYCLOAK_DAEMON_USER}
+      KEYCLOAK_DAEMON_GROUP: ${KEYCLOAK_DAEMON_GROUP}
+      KEYCLOAK_BIND_ADDRESS: ${KEYCLOAK_BIND_ADDRESS}
+      KEYCLOAK_ROOT_LOG_LEVEL: ${KEYCLOAK_ROOT_LOG_LEVEL}
+      KEYCLOAK_INIT_MAX_RETRIES: ${KEYCLOAK_INIT_MAX_RETRIES}
+
+    depends_on:
+      - keycloak_postgres_db
+    networks:
+      - keycloak_network
+    restart: on-failure:5
+
+  orders-service:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    environment:
+      DEBUG: ${DEBUG}
+      CLIENT_ID: ${CLIENT_ID}
+      SECRET_KEY: ${SECRET_KEY}
+      AT_API_KEY: ${AT_API_KEY}
+      AT_USERNAME: ${AT_USERNAME}
+      DJANGO_PORT: ${DJANGO_PORT}
+      CLIENT_SECRET: ${CLIENT_SECRET}
+      AT_TEST_PHONENUMBER: ${AT_TEST_PHONENUMBER}
+      OPENID_TOKEN_ENDPOINT: ${OPENID_TOKEN_ENDPOINT}
+      OPENID_INTROSPECT_URL: ${OPENID_INTROSPECT_URL}      
+      DJANGO_POSTGRESQL_USERNAME: ${DJANGO_POSTGRESQL_USERNAME}
+      DJANGO_POSTGRESQL_PASSWORD: ${DJANGO_POSTGRESQL_PASSWORD}
+      DJANGO_POSTGRESQL_HOSTNAME: ${DJANGO_POSTGRESQL_HOSTNAME}
+      DJANGO_POSTGRESQL_DATABASE: ${DJANGO_POSTGRESQL_DATABASE}
+      DJANGO_POSTGRESQL_PORT_NUMBER: ${DJANGO_POSTGRESQL_PORT_NUMBER}
+      KEYCLOAK_POSTGRESQL_PORT: ${KEYCLOAK_POSTGRESQL_PORT}
+      KEYCLOAK_POSTGRESQL_HOSTNAME: ${KEYCLOAK_POSTGRESQL_HOSTNAME}
+      KEYCLOAK_CONTAINER_HOSTNAME: ${KEYCLOAK_CONTAINER_HOSTNAME}
+      KEYCLOAK_INTERNAL_HTTP_PORT: ${KEYCLOAK_INTERNAL_HTTP_PORT}
+      
+    depends_on:
+      - postgres-savannah
+      - keycloak_postgres_db
+      - keycloak
+    ports:
+      - ${DJANGO_PORT}:${DJANGO_PORT}
+    networks:
+      - keycloak_network
+    entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
+
+volumes:
+  # keycloak_data:
+  #   driver: local
+
+  order_db:
+    driver: local
+
+networks:
+  keycloak_network:
+    driver: bridge
+
