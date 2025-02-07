@@ -1,0 +1,176 @@
+- name: Install Kubernetes 1.32.1 on Ubuntu 22
+  hosts: ubuntu_servers
+  become: yes
+  tasks:
+    - name: Update and upgrade system packages
+      apt:
+        update_cache: yes
+        upgrade: yes
+
+    - name: Disable swap
+      command: swapoff -a
+
+    - name: Remove swap entry from /etc/fstab
+      replace:
+        path: /etc/fstab
+        regexp: '(^.*\sswap\s.*$)'
+        replace: '#\1'
+
+    - name: Load kernel modules
+      copy:
+        dest: /etc/modules-load.d/containerd.conf
+        content: |
+          overlay
+          br_netfilter
+
+    - name: Apply kernel modules
+      shell: |
+        modprobe overlay
+        modprobe br_netfilter
+
+    - name: Set Kubernetes kernel parameters
+      copy:
+        dest: /etc/sysctl.d/kubernetes.conf
+        content: |
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.bridge.bridge-nf-call-iptables = 1
+          net.ipv4.ip_forward = 1
+
+    - name: Apply sysctl parameters
+      command: sysctl --system
+
+    - name: Install container runtime dependencies
+      apt:
+        name:
+          - curl
+          - gnupg2
+          - software-properties-common
+          - apt-transport-https
+          - ca-certificates
+        state: present
+
+    - name: Check if Docker GPG key exists
+      stat:
+        path: /etc/apt/trusted.gpg.d/docker.gpg
+      register: docker_gpg_key
+
+    - name: Add Docker GPG key if not present
+      shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg
+      when: not docker_gpg_key.stat.exists
+
+    - name: Add Docker repository
+      shell: add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+    - name: Update apt package index
+      apt:
+        update_cache: yes
+
+    - name: Install containerd runtime
+      apt:
+        name: containerd.io
+        state: present
+
+    - name: Configure containerd
+      shell: containerd config default | tee /etc/containerd/config.toml > /dev/null 2>&1
+
+    - name: Enable systemd cgroup driver for containerd
+      replace:
+        path: /etc/containerd/config.toml
+        regexp: "SystemdCgroup = false"
+        replace: "SystemdCgroup = true"
+
+    - name: Restart and enable containerd service
+      systemd:
+        name: containerd
+        state: restarted
+        enabled: yes
+
+    - name: Check if Kubernetes GPG key exists
+      stat:
+        path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      register: k8s_gpg_key
+
+    - name: Add Kubernetes GPG key if not present
+      shell: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      when: not k8s_gpg_key.stat.exists
+
+    - name: Check if Kubernetes apt repository file exists
+      stat:
+        path: /etc/apt/sources.list.d/kubernetes.list
+      register: k8s_repo_file
+
+    - name: Add Kubernetes apt repository if not present
+      shell: echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+      when: not k8s_repo_file.stat.exists
+
+    - name: Update package index
+      apt:
+        update_cache: yes
+
+    - name: Install Kubernetes components (kubeadm, kubelet, kubectl)
+      apt:
+        name:
+          - kubelet=1.32.1-1.1
+          - kubeadm=1.32.1-1.1
+          - kubectl=1.32.1-1.1
+        state: present
+
+    - name: Hold Kubernetes packages to prevent automatic updates
+      command: apt-mark hold kubelet kubeadm kubectl
+
+    - name: Initialize Kubernetes cluster
+      shell: kubeadm init --pod-network-cidr=192.168.0.0/16
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Ensure .kube directory exists for the user
+      file:
+        path: /home/mbatha/.kube
+        state: directory
+        owner: mbatha
+        group: mbatha
+        mode: "0755"
+
+    - name: Copy Kubernetes admin.conf to user's kubeconfig
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/mbatha/.kube/config
+        remote_src: yes
+        owner: mbatha
+        group: mbatha
+        mode: "0644"
+
+    - name: Change kubeconfig file ownership
+      command: chown mbatha:mbatha /home/mbatha/.kube/config
+
+    - name: Extract the Kubernetes node name
+      shell: KUBECONFIG=/home/mbatha/.kube/config kubectl get nodes --no-headers -o custom-columns=":metadata.name"
+      register: node_name
+      changed_when: false
+
+    - name: Install Calico network plugin
+      shell: KUBECONFIG=/home/mbatha/.kube/config kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.0/manifests/calico.yaml
+      register: calico_install
+      retries: 10 # Retry 10 times (10 minutes)
+      delay: 60 # 1 minute delay between retries
+      until: calico_install.rc == 0
+      ignore_errors: yes # Ignore errors to allow retries even if it fails
+
+    # - name: Extract the Kubernetes node name (again)
+    #   shell: KUBECONFIG=/home/mbatha/.kube/config kubectl get nodes -o jsonpath='{.items[0].metadata.name}'
+    #   register: node_name
+
+    - name: Remove control-plane taint
+      shell: KUBECONFIG=/home/mbatha/.kube/config kubectl taint node {{ node_name.stdout }} node-role.kubernetes.io/control-plane:NoSchedule-
+      ignore_errors: yes # Ignore if taint is already removed
+
+    - name: Install Helm
+      shell: curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && chmod 700 get_helm.sh && ./get_helm.sh
+
+    - name: Wait for the Kubernetes node to be ready
+      shell: >
+        until KUBECONFIG=/home/mbatha/.kube/config kubectl get node {{ node_name.stdout }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' | grep -q "True"; 
+        do echo "Waiting for node to be ready..."; sleep 10; done
+      register: node_ready
+      changed_when: false
+      timeout: 300 # 5 minutes max wait time
