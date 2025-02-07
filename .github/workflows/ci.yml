@@ -1,0 +1,119 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main # Adjust the branch name as needed
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    name: Lint Code Base
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff Formatting Checks
+        run: |
+          ruff check .
+
+  test:
+    name: Run Tests
+    needs: lint # Ensure linting passes before running tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRESQL_PASSWORD }}
+          POSTGRES_DB: orders_service
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+
+      - name: Install Dependencies
+        working-directory: ./app
+        run: |
+          pip install -r requirements.txt
+
+      - name: Configure Environment Variables
+        run: |
+          echo "DJANGO_POSTGRESQL_HOSTNAME=localhost" >> $GITHUB_ENV
+          echo "DJANGO_POSTGRESQL_DATABASE=orders_service" >> $GITHUB_ENV
+          echo "DJANGO_POSTGRESQL_PORT_NUMBER=5432" >> $GITHUB_ENV
+          echo "DJANGO_POSTGRESQL_USERNAME=postgres" >> $GITHUB_ENV
+          echo "DJANGO_POSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD }}" >> $GITHUB_ENV
+          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> $GITHUB_ENV
+          echo "DEBUG=${{ secrets.DEBUG }}" >> $GITHUB_ENV
+          echo "CLIENT_ID=${{ secrets.CLIENT_ID }}" >> $GITHUB_ENV
+          echo "CLIENT_SECRET=${{ secrets.CLIENT_SECRET }}" >> $GITHUB_ENV
+          echo "OPENID_TOKEN_ENDPOINT=${{ secrets.OPENID_TOKEN_ENDPOINT }}" >> $GITHUB_ENV
+          echo "OPENID_INTROSPECT_URL=${{ secrets.OPENID_INTROSPECT_URL }}" >> $GITHUB_ENV
+          echo "AT_API_KEY=${{ secrets.AT_API_KEY }}" >> $GITHUB_ENV
+          echo "AT_USERNAME=${{ secrets.AT_USERNAME }}" >> $GITHUB_ENV
+          echo "AT_TEST_PHONENUMBER=${{ secrets.AT_TEST_PHONENUMBER }}" >> $GITHUB_ENV
+
+      - name: Apply Migrations
+        working-directory: ./app
+        run: |
+          python manage.py migrate
+
+      - name: Run Tests with Coverage
+        working-directory: ./app
+        run: |
+          pytest
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v3
+
+  # build:
+  #   name: Build Docker Image
+  #   needs: test # Ensure tests pass before building the image
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - name: Checkout Code
+  #       uses: actions/checkout@v3
+
+  #     - name: Log in to Docker Hub
+  #       uses: docker/login-action@v2
+  #       with:
+  #         username: ${{ secrets.DOCKERHUB_USERNAME }}
+  #         password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+  #     - name: Build and Push Docker Image
+  #       uses: docker/build-push-action@v3
+  #       with:
+  #         context: .
+  #         file: ./Dockerfile
+  #         push: true
+  #         tags: mbathamarvin/orders-service:latest
