@@ -1,3 +1,12 @@
+# Secrets
+charts/orders-service/values-secret.yaml
+charts/postgres-savannah/values-secret.yaml
+
+# Ansible logs ignored
+deployment_logs/
+*.log
+
+gen_report.py
 
 # pyenv
 .python-version
