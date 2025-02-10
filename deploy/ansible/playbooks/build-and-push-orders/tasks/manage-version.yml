@@ -1,0 +1,22 @@
+---
+- name: Read current version
+  slurp:
+    src: "{{ version_file }}"
+  register: current_version
+  ignore_errors: yes
+
+- name: Set version content
+  set_fact:
+    version_content: "{{ current_version['content'] | b64decode | regex_replace('\n', '') if current_version.failed is not defined else '0.1.0' }}"
+
+- name: Increment version
+  set_fact:
+    major: "{{ version_content.split('.')[0] }}"
+    minor: "{{ version_content.split('.')[1] }}"
+    patch: "{{ version_content.split('.')[2] | int + 1 }}"
+    new_version: "{{ version_content.split('.')[0] }}.{{ version_content.split('.')[1] }}.{{ version_content.split('.')[2] | int + 1 }}"
+
+- name: Update version file
+  copy:
+    content: "{{ new_version }}"
+    dest: "{{ version_file }}"

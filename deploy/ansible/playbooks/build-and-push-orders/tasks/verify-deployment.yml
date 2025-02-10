@@ -1,0 +1,13 @@
+---
+- name: Check image existence
+  community.docker.docker_image_info:
+    name: "{{ image_name }}:{{ new_version }}"
+  register: image_info
+
+- name: Display deployment summary
+  debug:
+    msg:
+      - "Deployment Summary:"
+      - "Version: {{ new_version }}"
+      - "Image: {{ image_name }}"
+      - "Status: {{ 'Success' if image_info.images | length > 0 else 'Failed' }}"

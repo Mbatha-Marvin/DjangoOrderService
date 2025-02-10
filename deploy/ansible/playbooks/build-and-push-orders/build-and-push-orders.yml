@@ -1,0 +1,33 @@
+---
+- name: Build and Push orders-service to DockerHub
+  hosts: localhost
+  connection: local
+  vars_files:
+    - vars/main.yml
+  
+  pre_tasks:
+    - name: Prepare deployment environment
+      include_tasks: tasks/prepare-environment.yml
+      tags: ['prepare']
+
+  tasks:
+    - name: Manage version tracking
+      include_tasks: tasks/manage-version.yml
+      tags: ['version']
+
+    - name: Authenticate with DockerHub
+      include_tasks: tasks/authenticate-dockerhub.yml
+      tags: ['authenticate']
+
+    - name: Build Docker image
+      include_tasks: tasks/build-image.yml
+      tags: ['build']
+
+    - name: Push to DockerHub
+      include_tasks: tasks/push-image.yml
+      tags: ['push']
+
+  post_tasks:
+    - name: Verify deployment
+      include_tasks: tasks/verify-deployment.yml
+      tags: ['verify']

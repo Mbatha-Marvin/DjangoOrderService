@@ -1,0 +1,12 @@
+# DockerHub Configuration
+dockerhub_username: "mbathamarvin"
+image_name: "mbathamarvin/orders-service"
+
+# Paths
+app_path: "../../../../app"
+log_path: "./deployment_logs"
+version_file: "{{ app_path }}/version.txt"
+
+# Image Metadata
+maintainer: "Marvin Mbatha <mbatha.marvin.dev@gmail.com>"
+description: "Orders service for handling order processing"

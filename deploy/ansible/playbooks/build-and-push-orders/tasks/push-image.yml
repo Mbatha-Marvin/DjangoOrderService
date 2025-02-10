@@ -1,0 +1,27 @@
+---
+- name: Push to DockerHub
+  community.docker.docker_image:
+    name: "{{ image_name }}"
+    tag: "{{ new_version }}"
+    push: true
+    source: local
+  register: push_result
+
+
+# #### Only for Pro Accounts
+# - name: Update DockerHub README
+#   uri:
+#     url: "https://hub.docker.com/v2/repositories/{{ dockerhub_username }}/orders-service/"
+#     method: PATCH
+#     body_format: json
+#     body: "{{ lookup('file', '{{ app_path }}/README-dockerhub.md') | string }}"
+#     headers:
+#       Authorization: "JWT {{ dockerhub_token }}"
+#     status_code: 200
+#   register: readme_result
+#   ignore_errors: yes
+
+# - name: Log README update status
+#   lineinfile:
+#     path: "{{ log_path }}/deployment_{{ new_version }}.log"
+#     line: "README update {{ 'successful' if readme_result.changed else 'failed' }} at {{ ansible_date_time.iso8601 }}"

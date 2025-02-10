@@ -1,0 +1,6 @@
+---
+- name: Create logs directory
+  file:
+    path: "{{ log_path }}"
+    state: directory
+    mode: "0755"

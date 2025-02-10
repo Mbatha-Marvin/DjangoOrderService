@@ -1,0 +1,27 @@
+---
+- name: Verify Dockerfile
+  stat:
+    path: "{{ app_path }}/Dockerfile"
+  register: dockerfile_check
+
+- name: Fail if Dockerfile missing
+  fail:
+    msg: "Dockerfile not found in {{ app_path }}"
+  when: not dockerfile_check.stat.exists
+
+- name: Build image
+  community.docker.docker_image:
+    name: "{{ image_name }}"
+    tag: "{{ new_version }}"
+    build:
+      path: "{{ app_path }}"
+      pull: yes
+      args:
+        LABEL: >
+          maintainer="Marvin Mbatha <mbatha.marvin.dev@gmail.com>"
+          description="Orders service for handling order processing"
+          version="{{ new_version }}"
+          build_date="{{ ansible_date_time.iso8601 }}"
+    source: build
+    force_source: true
+  register: build_result
