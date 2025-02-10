@@ -1,0 +1,9 @@
+---
+kubernetes_version: "1.32.1"
+kubernetes_package_version: "1.32.1-1.1"
+calico_version: "v3.25.0"
+pod_network_cidr: "192.168.0.0/16"
+user_home: "/home/mbatha"
+log_dir: "/var/log/k8s-install"
+backup_dir: "/var/backup/k8s"
+containerd_config: "/etc/containerd/config.toml"

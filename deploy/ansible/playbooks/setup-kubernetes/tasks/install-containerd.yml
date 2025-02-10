@@ -1,0 +1,58 @@
+---
+- name: Install containerd prerequisites
+  apt:
+    name:
+      - curl
+      - gnupg2
+      - software-properties-common
+      - apt-transport-https
+      - ca-certificates
+    state: present
+
+- name: Setup Docker repository
+  block:
+    - name: Check Docker GPG key
+      stat:
+        path: /etc/apt/trusted.gpg.d/docker.gpg
+      register: docker_gpg_key
+
+    - name: Add Docker GPG key
+      shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg
+      when: not docker_gpg_key.stat.exists
+
+    - name: Add Docker repository
+      shell: add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      register: docker_repo
+
+- name: Install and configure containerd
+  block:
+    - name: Install containerd package
+      apt:
+        name: containerd.io
+        state: present
+        update_cache: yes
+      register: containerd_install
+
+    - name: Generate default containerd configuration
+      shell: containerd config default | tee {{ containerd_config }} > /dev/null 2>&1
+      args:
+        creates: "{{ containerd_config }}"
+
+    - name: Enable systemd cgroup driver for containerd
+      replace:
+        path: "{{ containerd_config }}"
+        regexp: "SystemdCgroup = false"
+        replace: "SystemdCgroup = true"
+
+    - name: Enable CRI plugin in containerd
+      lineinfile:
+        path: "{{ containerd_config }}"
+        regexp: '^disabled_plugins = \["cri"\]'
+        line: '#disabled_plugins = ["cri"]'
+        backup: yes
+
+    - name: Restart and enable containerd service
+      systemd:
+        name: containerd
+        state: restarted
+        enabled: yes

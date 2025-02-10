@@ -1,0 +1,44 @@
+---
+- name: Configure cluster networking
+  block:
+    - name: Wait for Kubernetes cluster to be ready
+      shell: |
+        until KUBECONFIG={{ user_home }}/.kube/config kubectl get nodes; do 
+          echo "Waiting for cluster to be ready..."; 
+          sleep 30; 
+        done
+      args:
+        executable: /bin/bash
+      register: cluster_ready
+      retries: 20
+      delay: 30
+      until: cluster_ready.rc == 0
+
+    - name: Extract the Kubernetes node name
+      shell: KUBECONFIG={{ user_home }}/.kube/config kubectl get nodes --no-headers -o custom-columns=":metadata.name"
+      register: node_name
+      changed_when: false
+      retries: 10
+      delay: 30
+      until: node_name.rc == 0
+
+    - name: Verify node name extraction
+      fail:
+        msg: "Could not extract node name. Check cluster status."
+      when: node_name.stdout | length == 0
+
+    - name: Install Calico network plugin
+      shell: |
+        KUBECONFIG={{ user_home }}/.kube/config kubectl apply -f \
+        https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/calico.yaml
+      register: calico_install
+      retries: 10
+      delay: 60
+      until: calico_install.rc == 0
+      ignore_errors: yes
+
+    - name: Remove control-plane taint
+      shell: |
+        KUBECONFIG={{ user_home }}/.kube/config kubectl taint node {{ node_name.stdout }} \
+        node-role.kubernetes.io/control-plane:NoSchedule-
+      ignore_errors: yes

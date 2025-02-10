@@ -1,0 +1,19 @@
+---
+- name: verify kernel modules
+  shell: |
+    lsmod | grep overlay
+    lsmod | grep br_netfilter
+  register: kernel_verify
+  failed_when: kernel_verify.rc != 0
+
+- name: restart containerd
+  systemd:
+    name: containerd
+    state: restarted
+    daemon_reload: yes
+
+- name: restart kubelet
+  systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes

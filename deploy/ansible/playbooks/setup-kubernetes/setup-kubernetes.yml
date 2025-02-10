@@ -1,0 +1,41 @@
+---
+- name: Install Single Node Kubernetes 1.32.1 with Helm on Ubuntu 22
+  hosts: ubuntu_servers
+  become: yes
+  vars_files:
+    - vars/main.yml
+  
+  pre_tasks:
+    - name: Include pre-flight checks
+      include_tasks: tasks/pre-flight.yml
+      tags: ['pre-flight', 'always']
+
+  tasks:
+    - name: Setup system requirements
+      include_tasks: tasks/system-prep.yml
+      tags: ['system-prep']
+
+    - name: Install and configure containerd
+      include_tasks: tasks/install-containerd.yml
+      tags: ['containerd']
+
+    - name: Install Kubernetes components
+      include_tasks: tasks/install-kubernetes.yml
+      tags: ['kubernetes']
+
+    - name: Configure networking
+      include_tasks: tasks/configure-cluster-network.yml
+      tags: ['networking']
+
+    - name: Install Helm
+      include_tasks: tasks/install-helm.yml
+      tags: ['helm']
+
+  post_tasks:
+    - name: Verify installation
+      include_tasks: tasks/post-flight.yml
+      tags: ['post-flight', 'always']
+
+  handlers:
+    - name: Include handlers
+      import_tasks: handlers/main.yml

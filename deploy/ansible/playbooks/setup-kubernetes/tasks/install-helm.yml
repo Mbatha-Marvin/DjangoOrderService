@@ -1,0 +1,18 @@
+---
+- name: Install Helm
+  block:
+    - name: Download Helm installer
+      get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /tmp/get_helm.sh
+        mode: '0700'
+
+    - name: Run Helm installer
+      command: /tmp/get_helm.sh
+      register: helm_install
+
+  always:
+    - name: Cleanup Helm installer
+      file:
+        path: /tmp/get_helm.sh
+        state: absent

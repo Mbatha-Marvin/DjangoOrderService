@@ -1,0 +1,54 @@
+---
+- name: Update and upgrade system packages
+  apt:
+    update_cache: yes
+    upgrade: yes
+  register: apt_update
+  retries: 3
+  delay: 10
+  until: apt_update is success
+
+- name: Disable swap
+  block:
+    - name: Disable swap immediately
+      command: swapoff -a
+      changed_when: false
+
+    - name: Remove swap entry from /etc/fstab
+      replace:
+        path: /etc/fstab
+        regexp: '(^.*\sswap\s.*$)'
+        replace: '#\1'
+      register: fstab_update
+
+- name: Configure kernel modules
+  block:
+    - name: Setup required kernel modules
+      copy:
+        dest: /etc/modules-load.d/containerd.conf
+        content: |
+          overlay
+          br_netfilter
+      register: kernel_modules
+
+    - name: Load kernel modules
+      shell: |
+        modprobe overlay
+        modprobe br_netfilter
+      changed_when: true
+      notify: verify kernel modules
+
+- name: Configure kernel parameters
+  block:
+    - name: Set Kubernetes sysctl parameters
+      copy:
+        dest: /etc/sysctl.d/kubernetes.conf
+        content: |
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.bridge.bridge-nf-call-iptables = 1
+          net.ipv4.ip_forward = 1
+      register: sysctl_conf
+
+    - name: Apply sysctl parameters
+      command: sysctl --system
+      when: sysctl_conf.changed

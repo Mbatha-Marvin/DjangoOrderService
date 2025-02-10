@@ -1,0 +1,26 @@
+---
+- name: Wait for the Kubernetes node to be ready
+  shell: >
+    until KUBECONFIG={{ user_home }}/.kube/config kubectl get node {{ node_name.stdout }} \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' | grep -q "True"; 
+    do echo "Waiting for node to be ready..."; sleep 10; done
+  register: node_ready
+  changed_when: false
+  timeout: 300  # 5 minutes max wait time
+
+- name: Verify Helm installation
+  command: helm version
+  register: helm_version
+  changed_when: false
+  failed_when: helm_version.rc != 0
+
+- name: Check if core Kubernetes components are running
+  shell: >
+    KUBECONFIG={{ user_home }}/.kube/config kubectl get pods -A
+  register: kubernetes_pods
+  changed_when: false
+  failed_when: "'Running' not in kubernetes_pods.stdout"
+
+- name: Display Kubernetes pod status
+  debug:
+    msg: "{{ kubernetes_pods.stdout_lines }}"

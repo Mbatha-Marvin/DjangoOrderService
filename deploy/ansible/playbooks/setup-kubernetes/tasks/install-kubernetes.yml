@@ -1,0 +1,77 @@
+---
+- name: Setup Kubernetes repository
+  block:
+    - name: Check if Kubernetes GPG key exists
+      stat:
+        path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      register: k8s_gpg_key
+
+    - name: Add Kubernetes GPG key if not present
+      shell: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      when: not k8s_gpg_key.stat.exists
+
+    - name: Check if Kubernetes apt repository file exists
+      stat:
+        path: /etc/apt/sources.list.d/kubernetes.list
+      register: k8s_repo_file
+
+    - name: Add Kubernetes apt repository if not present
+      shell: echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+      when: not k8s_repo_file.stat.exists
+
+    - name: Update package index
+      apt:
+        update_cache: yes
+
+- name: Install Kubernetes components
+  block:
+    - name: Install kubeadm, kubelet, kubectl
+      apt:
+        name:
+          - "kubelet={{ kubernetes_package_version }}"
+          - "kubeadm={{ kubernetes_package_version }}"
+          - "kubectl={{ kubernetes_package_version }}"
+        state: present
+        update_cache: yes
+
+    - name: Hold Kubernetes packages
+      command: apt-mark hold kubelet kubeadm kubectl
+      changed_when: false
+
+- name: Initialize Kubernetes cluster
+  block:
+    - name: Run kubeadm init
+      shell: |
+        kubeadm init --pod-network-cidr={{ pod_network_cidr }} 2>&1 | tee {{ log_dir }}/kubeadm-init.log
+      args:
+        creates: /etc/kubernetes/admin.conf
+      register: kubeadm_init
+
+  rescue:
+    - name: Collect failure information
+      shell: |
+        journalctl -xeu kubelet > {{ log_dir }}/kubelet.log
+        kubeadm config print init-defaults > {{ log_dir }}/kubeadm-config.log
+      ignore_errors: yes
+
+- name: Configure kubeconfig for user
+  block:
+    - name: Ensure .kube directory exists for the user
+      file:
+        path: "{{ user_home }}/.kube"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Copy Kubernetes admin.conf to user's kubeconfig
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: "{{ user_home }}/.kube/config"
+        remote_src: yes
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
+    - name: Change kubeconfig file ownership
+      command: chown {{ ansible_user }}:{{ ansible_user }} {{ user_home }}/.kube/config
