@@ -1,0 +1,23 @@
+image:
+  repository: docker.io/bitnami/postgresql
+  tag: "17.2.0"
+  pullPolicy: Always
+
+postgresqlDatabase: "orders"
+
+service:
+  type: ClusterIP
+  port: 5432
+
+persistence:
+  enabled: true
+  size: 8Gi
+  storageClassName: "standard"
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: postgres-savannah
+description: PostgreSQL database for orders-service
+type: application
+version: 0.1.0
+appVersion: "17.2.0" 

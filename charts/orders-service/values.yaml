@@ -1,0 +1,39 @@
+image:
+  repository: "mbathamarvin/orders-service"
+  tag: "latest"
+  pullPolicy: "Always"
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8000
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+config:
+  DJANGO_POSTGRESQL_HOSTNAME: "postgres-savannah"
+  DJANGO_POSTGRESQL_DATABASE: "orders"
+  DJANGO_POSTGRESQL_PORT_NUMBER: "5432"
+  OPENID_TOKEN_ENDPOINT: "https://example.com/token"
+  OPENID_INTROSPECT_URL: "https://example.com/introspect"
+
+ingress:
+  enabled: false
+  annotations: {}
+  hosts:
+    - host: orders.example.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-savannah
+spec:
+  selector:
+    matchLabels:
+      app: postgres-savannah
+  serviceName: "postgres-savannah"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: postgres-savannah
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-savannah-secret
+                  key: postgresqlUsername
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-savannah-secret
+                  key: postgresqlPassword
+            - name: POSTGRES_DB
+              value: "{{ .Values.postgresqlDatabase }}"
+          ports:
+            - containerPort: { { .Values.service.port } }
+          volumeMounts:
+            - mountPath: /bitnami/postgresql
+              name: postgres-data
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - "$(POSTGRES_USER)"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - "$(POSTGRES_USER)"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-savannah-pvc

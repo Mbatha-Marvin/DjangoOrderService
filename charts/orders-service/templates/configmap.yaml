@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orders-service-config
+data:
+  DJANGO_POSTGRESQL_HOSTNAME: "{{ .Values.config.DJANGO_POSTGRESQL_HOSTNAME }}"
+  DJANGO_POSTGRESQL_DATABASE: "{{ .Values.config.DJANGO_POSTGRESQL_DATABASE }}"
+  DJANGO_POSTGRESQL_PORT_NUMBER: "{{ .Values.config.DJANGO_POSTGRESQL_PORT_NUMBER }}"
+  OPENID_TOKEN_ENDPOINT: "{{ .Values.config.OPENID_TOKEN_ENDPOINT }}"
+  OPENID_INTROSPECT_URL: "{{ .Values.config.OPENID_INTROSPECT_URL }}"
